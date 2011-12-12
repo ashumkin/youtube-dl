@@ -43,6 +43,7 @@ import urllib
 import urllib2
 import warnings
 import zlib
+from xml.sax.saxutils import unescape
 
 if os.name == 'nt':
 	import ctypes
@@ -2114,6 +2115,118 @@ class VimeoIE(InfoExtractor):
 		except UnavailableVideoError:
 			self._downloader.trouble(u'ERROR: unable to download video')
 
+
+class LJToysIE(InfoExtractor):
+	"""Information extractor for lj-toys.com."""
+
+	_VALID_URL = r'(?:http://)?lj-toys\.com/\?auth_token=.+moduleid=(\d+)'
+	IE_NAME = u'LJ-Toys Youtube video'
+
+	def __init__(self, downloader=None):
+		InfoExtractor.__init__(self, downloader)
+
+	@staticmethod
+	def suitable(url):
+		return (re.match(LJToysIE._VALID_URL, url) is not None)
+
+	def report_download_webpage(self, video_id):
+		"""Report webpage download."""
+		self._downloader.to_screen(u'[lj-toys] %s: Downloading webpage' % video_id)
+
+	def report_extraction(self, video_id):
+		"""Report information extraction."""
+		self._downloader.to_screen(u'[lj-toys] %s: Extracting information' % video_id)
+
+	def _real_initialize(self):
+		return
+
+	def _real_extract(self, url):
+		# Extract id from URL
+		mobj = re.match(self._VALID_URL, url)
+		if mobj is None:
+			self._downloader.trouble(u'ERROR: Invalid URL: %s' % url)
+			return
+
+		# At this point we have a new video
+		self._downloader.increment_downloads()
+		video_id = mobj.group(1)
+
+		video_extension = 'flv'
+
+		# Retrieve video webpage to extract further information
+		request = urllib2.Request(url)
+		try:
+			self.report_download_webpage(video_id)
+			webpage = urllib2.urlopen(request).read()
+		except (urllib2.URLError, httplib.HTTPException, socket.error), err:
+			self._downloader.trouble(u'ERROR: Unable to retrieve video webpage: %s' % str(err))
+			return
+
+		# Extract youtube URL from webpage
+		self.report_extraction(video_id)
+		mobj = re.search(r'<embed src="(http://www.youtube.com/v/[^"]+)"', webpage)
+		if mobj is None:
+			self._downloader.trouble(u'ERROR: unable to extract media URL')
+			return
+		video_url = urllib.unquote(mobj.group(1))
+
+		self._downloader.download( [ video_url ] )
+
+class LJLJToysIE(InfoExtractor):
+	"""Information extractor for lj-toys frames in LJ posts."""
+
+	_VALID_URL = r'(?:http://)?(?:[^/]+)\.livejournal\.com/(\d+)\.html?'
+	IE_NAME = u'LJ LJ-Toys Youtube video'
+
+	def __init__(self, downloader=None):
+		InfoExtractor.__init__(self, downloader)
+
+	@staticmethod
+	def suitable(url):
+		return (re.match(LJLJToysIE._VALID_URL, url) is not None)
+
+	def report_download_webpage(self, video_id):
+		"""Report webpage download."""
+		self._downloader.to_screen(u'[lj-lj-toys] %s: Downloading webpage' % video_id)
+
+	def report_extraction(self, video_id):
+		"""Report information extraction."""
+		self._downloader.to_screen(u'[lj-lj-toys] %s: Extracting information' % video_id)
+
+	def _real_initialize(self):
+		return
+
+	def _real_extract(self, url):
+		# Extract id from URL
+		mobj = re.match(self._VALID_URL, url)
+		if mobj is None:
+			self._downloader.trouble(u'ERROR: Invalid URL: %s' % url)
+			return
+
+		# At this point we have a new video
+		self._downloader.increment_downloads()
+		video_id = mobj.group(1)
+
+		# Retrieve video webpage to extract further information
+		request = urllib2.Request(url)
+		try:
+			self.report_download_webpage(video_id)
+			webpage = urllib2.urlopen(request).read()
+		except (urllib2.URLError, httplib.HTTPException, socket.error), err:
+			self._downloader.trouble(u'ERROR: Unable to retrieve video webpage: %s' % str(err))
+			return
+
+		# Extract URL, uploader, and title from webpage
+		self.report_extraction(video_id)
+		regexp = r'<iframe\s+src="(http://lj-toys\.com/[^"]+)"'
+		mobj = re.search(regexp, webpage)
+		if mobj is None:
+			self._downloader.trouble(u'ERROR: unable to extract media URLs')
+			return
+		ljtoys_urls = re.findall(regexp, webpage)
+		ljtoys_urls = [ unescape(link) for link in ljtoys_urls ]
+
+		self._downloader.download( ljtoys_urls )
 
 class GenericIE(InfoExtractor):
 	"""Generic last-resort information extractor."""
@@ -4307,6 +4420,8 @@ def gen_extractors():
 		InfoQIE(),
 		MixcloudIE(),
 		StanfordOpenClassroomIE(),
+		LJToysIE(),
+		LJLJToysIE(),
 
 		GenericIE()
 	]
